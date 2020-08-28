@@ -30,6 +30,20 @@
 "for"                 return 'for'
 "var"                 return 'var'
 "of"                  return 'of'
+"Math"                return 'Math'
+"sin"                 return 'sin'
+"cos"                 return 'cos'
+"tan"                 return 'tan'
+"asin"                return 'asin'
+"acos"                return 'acos'
+"atan"                return 'atan'
+"pow"                 return 'pow'
+"abs"                 return 'abs'
+"round"               return 'round'
+"floor"               return 'floor'
+"number"              return 'number'
+"boolean"             return 'boolean'
+"Number"              return 'Number'
 ","                   return ','
 ";"                   return ';'
 "..."                 return '...'
@@ -67,8 +81,6 @@
 "?"                   return '?'
 "("                   return '('
 ")"                   return ')'
-"instanceof"          return 'instanceof'
-"in"                  return 'in'
 [a-zA-Z_][a-zA-Z0-9_]* return 'IDENTIFIER'
 <<EOF>>               return 'EOF'
 .                     return 'INVALID'
@@ -82,7 +94,7 @@
 %left '...'
 %left '||' '|'
 %left '&&' '&'
-%left '<' '<=' '>' '>=' '===' '!==' 'in' 'instanceof'
+%left '<' '<=' '>' '>=' '===' '!=='
 %left '+' '-'
 %left '*' '/' '%'
 %left UMINUS
@@ -115,6 +127,7 @@ top_level_statement:
 	| initialize_var1 ";" {$$ = $1+";"}
 	| "function" IDENTIFIER "(" identifiers ")" "{" "return" e ";" "}" {$$ = "#define "+$2+"("+$4+") "+$8;}
     | "function" IDENTIFIER "(" parameters ")" ":" IDENTIFIER bracket_statements {$$ = [$7,$2,"(",$4,")",$8].join(" ");}
+    | "class" IDENTIFIER "{" class_statements "}" {$$ = "struct "+$2+"{"+$4+"};";}
     ;
 top_level_statements: top_level_statements top_level_statement {$$ = $1+"\\n"+$2;} | top_level_statement {$$ =
  $1;};
@@ -131,8 +144,7 @@ statement_with_semicolon_: initialize_var1 | statement_with_semicolon;
 
 statement_with_semicolon
    : 
-   "continue" {$$ = [$1];}
-   | "return" e  {$$ = ["return",$2].join(" ");}
+   "return" e  {$$ = ["return",$2].join(" ");}
    | "const" IDENTIFIER ":" IDENTIFIER "=" e {$$ = ["const",$4,$2,"=",$6].join(" ");}
    | access_array "=" e {$$ = [$1,"=",$3].join(" ");}
    | IDENTIFIER "=" e {$$ = [$1,"=",$3].join(" ");}
@@ -143,7 +155,7 @@ statement_with_semicolon
    | IDENTIFIER "-=" e {$$ = [$1,$2,$3].join(" ");}
    | IDENTIFIER "*=" e {$$ = [$1,$2,$3].join(" ");}
    | IDENTIFIER "/=" e {$$ = [$1,$2,$3].join(" ");}
-   | IDENTIFIER "." dot_expr {$$ = [".",[$1].concat($3)]}
+   | IDENTIFIER "." dot_expr {$$ = $1+"."+$3;}
    ;
 
 initialize_var1: initialize_var_ {$$ = $1;};
@@ -166,10 +178,6 @@ e
         {$$ = [$1,'!=',$3].join(" ");}
     |e '===' e
         {$$ = [$1,'==',$3].join(" ");}
-    |e 'in' e
-        {$$ = ['in',$1,$3];}
-    |e 'instanceof' e
-        {$$ = ['in',$1,$3];}
     |e '<=' e
         {$$ = [$1,$2,$3].join(" ");}
     |e '<' e
@@ -233,6 +241,13 @@ if_statement:
 identifiers: IDENTIFIER "," identifiers {$$ = $1+","+$3;} | IDENTIFIER {$$ = $1;};
 bracket_statements: "{" statements "}" {$$= "{"+$2+"}";} | statement_with_semicolon ";" {$$ = $1+";";};
 
-type_:IDENTIFIER;
+type_:"boolean" {$$= "bool";}|"number"{$$= "float";};
 
 types: type_ "," types {$$ = [$1].concat($3);} | type_ {$$ = [$1];}; 
+
+class_statement:
+	IDENTIFIER ":" type_ ";" {$$ = $3+" "+$1+";";}
+	;
+
+class_statements: class_statement class_statements {$$ = $1+$2;} | class_statement {$$ =
+ $1;};
