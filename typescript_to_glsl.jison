@@ -41,6 +41,10 @@
 "abs"                 return 'abs'
 "round"               return 'round'
 "floor"               return 'floor'
+"exp"                 return 'exp'
+"sqrt"                return 'sqrt'
+"log"                 return 'log'
+"log2"                return 'log2'
 "number"              return 'number'
 "boolean"             return 'boolean'
 "Number"              return 'Number'
@@ -124,6 +128,7 @@ access_modifier: "public" | "private";
 top_level_statement:
 	statement
 	| "const" IDENTIFIER "=" e ";" {$$ = "#define "+$2+" "+$4;}
+	| "var" IDENTIFIER "=" e ";" {$$ = "#define "+$2+" "+$4;}
 	| initialize_var1 ";" {$$ = $1+";"}
 	| "function" IDENTIFIER "(" identifiers ")" "{" "return" e ";" "}" {$$ = "#define "+$2+"("+$4+") "+$8;}
     | "function" IDENTIFIER "(" parameters ")" ":" IDENTIFIER bracket_statements {$$ = [$7,$2,"(",$4,")",$8].join(" ");}
@@ -213,9 +218,12 @@ access_array: parentheses_expr "[" e "]" {$$ = $1+"["+$3+"]";};
 parentheses_expr:
     IDENTIFIER "(" ")" {$$= $1+"()";}
     | IDENTIFIER "(" exprs ")" {$$= [$1,"(",$3,")"].join("");}
+    | "Math" "." math_func "(" e ")" {$$ = $3+"("+$5+")";}
     | access_array
     | '(' e ')' {$$ = "("+$+")";}
     | parentheses_expr_;
+
+math_func: "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "abs" | "floor" | "ceil" | "round" | "exp" | "sqrt" | "log" | "log2";
 
 parentheses_expr_:
     "[" "]" {$$ = "()";}
