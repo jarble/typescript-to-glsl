@@ -18,6 +18,7 @@
 "static"              return "static"
 "const"               return 'const'
 "if"                  return 'if'
+"new"                 return 'new'
 "else"                return 'else'
 "type"                return 'type'
 "case"                return "case"
@@ -117,7 +118,7 @@ initialize_vars: initialize_vars ";" initialize_var {$$ = $1+";"+$3;} | initiali
  
 statements: statements_ {$$ = $1};
 
-case_statement: "case" e ":" statements "break" ";" {$$ = ["case",$2,":",$4,"break;"].join(",")};
+case_statement: "case" e ":" statements "break" ";" {$$ = ["case",$2,":",$4,"break;"].join(" ")};
 case_statements_: case_statement case_statements_ {$$ = $1+$2;} | case_statement {$$ =
  [$1];};
 case_statements: case_statements_ "default" ":" statements {$$ = $1+["default:",$4].join("");} | case_statements_;
@@ -217,9 +218,28 @@ access_array: parentheses_expr "[" e "]" {$$ = $1+"["+$3+"]";};
 
 parentheses_expr:
     IDENTIFIER "(" ")" {$$= $1+"()";}
+    | "new" IDENTIFIER "(" exprs ")" {$$= [$2,"(",$4,")"].join("");}
     | IDENTIFIER "(" exprs ")" {$$= [$1,"(",$3,")"].join("");}
+    | "Number" "(" exprs ")" {$$= ["float(",$3,")"].join("");}
     | "Math" "." math_func "(" e ")" {$$ = $3+"("+$5+")";}
-    | access_array
+    | "Math" "." IDENTIFIER {
+		if($3 == "E"){
+			$$ = Math.E;
+		}
+		else if($3 == "LOG10E"){
+			$$ = Math.LOG10E;
+		}
+		else if($3 == "SQRT1_2"){
+			$$ = Math.SQRT1_2;
+		}
+		else if($3 == "SQRT2"){
+			$$ = Math.SQRT2;
+		}
+		else if($3 == "PI"){
+			$$ = Math.PI;
+		}
+	}
+	| access_array
     | '(' e ')' {$$ = "("+$+")";}
     | parentheses_expr_;
 
