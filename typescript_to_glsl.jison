@@ -31,21 +31,7 @@
 "for"                 return 'for'
 "var"                 return 'var'
 "of"                  return 'of'
-"Math"                return 'Math'
-"sin"                 return 'sin'
-"cos"                 return 'cos'
-"tan"                 return 'tan'
-"asin"                return 'asin'
-"acos"                return 'acos'
-"atan"                return 'atan'
-"pow"                 return 'pow'
-"abs"                 return 'abs'
-"round"               return 'round'
-"floor"               return 'floor'
-"exp"                 return 'exp'
-"sqrt"                return 'sqrt'
-"log"                 return 'log'
-"log2"                return 'log2'
+"Math"                return "Math"
 "number"              return 'number'
 "boolean"             return 'boolean'
 "Number"              return 'Number'
@@ -120,7 +106,7 @@ statements: statements_ {$$ = $1};
 
 case_statement: "case" e ":" statements "break" ";" {$$ = ["case",$2,":",$4,"break;"].join(" ")};
 case_statements_: case_statement case_statements_ {$$ = $1+$2;} | case_statement {$$ =
- [$1];};
+ $1;};
 case_statements: case_statements_ "default" ":" statements {$$ = $1+["default:",$4].join("");} | case_statements_;
 
 
@@ -221,7 +207,7 @@ parentheses_expr:
     | "new" IDENTIFIER "(" exprs ")" {$$= [$2,"(",$4,")"].join("");}
     | IDENTIFIER "(" exprs ")" {$$= [$1,"(",$3,")"].join("");}
     | "Number" "(" exprs ")" {$$= ["float(",$3,")"].join("");}
-    | "Math" "." math_func "(" e ")" {$$ = $3+"("+$5+")";}
+    | "Math" "." IDENTIFIER "(" e ")" {$$ = $3+"("+$5+")";}
     | "Math" "." IDENTIFIER {
 		if($3 == "E"){
 			$$ = Math.E;
@@ -242,8 +228,6 @@ parentheses_expr:
 	| access_array
     | '(' e ')' {$$ = "("+$+")";}
     | parentheses_expr_;
-
-math_func: "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "abs" | "floor" | "ceil" | "round" | "exp" | "sqrt" | "log" | "log2";
 
 parentheses_expr_:
     "[" "]" {$$ = "()";}
