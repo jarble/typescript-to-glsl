@@ -137,8 +137,10 @@ statement_with_semicolon_: initialize_var1 | statement_with_semicolon;
 statement_with_semicolon
    : 
    "return" e  {$$ = ["return",$2].join(" ");}
-   | "const" IDENTIFIER ":" IDENTIFIER "=" e {$$ = ["const",$4,$2,"=",$6].join(" ");}
+   | "const" IDENTIFIER ":" type_ "=" e {$$ = ["const",$4,$2,"=",$6].join(" ");}
    | access_array "=" e {$$ = [$1,"=",$3].join(" ");}
+   | "var" IDENTIFIER ":" type_ "[" "]" "=" "[" exprs "]" {$$ = $4 + "[] "+$2+" = "+$4+"[]("+$9+")"}
+   | "const" IDENTIFIER ":" type_ "[" "]" "=" "[" exprs "]" {$$ = "const " + $4 + "[] "+$2+" = "+$4+"[]("+$9+")"}
    | IDENTIFIER "=" e {$$ = [$1,"=",$3].join(" ");}
    | IDENTIFIER "." IDENTIFIER "=" e {$$ = ["set_var",[".",[$1,$3]],$5];}
    | IDENTIFIER "++" {$$ = [$1,$2].join(" ");}
@@ -153,7 +155,7 @@ statement_with_semicolon
 initialize_var1: initialize_var_ {$$ = $1;};
 initialize_var: initialize_var_ {$$ = $1;};
 initialize_var_:
-   "var" IDENTIFIER ":" IDENTIFIER "=" e {$$ = [$4," ",$2,"=",$6].join("");};
+   "var" IDENTIFIER ":" type_ "=" e {$$ = [$4," ",$2,"=",$6].join("");};
 
 e
     :
