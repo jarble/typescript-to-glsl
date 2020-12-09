@@ -96,10 +96,8 @@
 
 expressions: top_level_statements EOF {return $1};
 
-statements_: statements_without_vars | statements_with_vars | initialize_var_ ";" {$$ = $1 + ";"} | initialize_var_ ";" statements_with_vars {$$ = $1+";"+$3;};
+statements_: statements_without_vars;
 statements_without_vars: statement statements_without_vars {$$ = $1+$2;} | statement {$$ =
- $1;};
-initialize_vars: initialize_vars ";" initialize_var {$$ = $1+";"+$3;} | initialize_var {$$ =
  $1;};
  
 statements: statements_ {$$ = $1};
@@ -118,7 +116,7 @@ top_level_statement:
 	| "var" IDENTIFIER "=" e ";" {$$ = "#define "+$2+" "+$4;}
 	| initialize_var1 ";" {$$ = $1+";"}
 	| "function" IDENTIFIER "(" identifiers ")" "{" "return" e ";" "}" {$$ = "#define "+$2+"("+$4+") "+$8;}
-    | "function" IDENTIFIER "(" parameters ")" ":" IDENTIFIER bracket_statements {$$ = [$7,$2,"(",$4,")",$8].join(" ");}
+    | "function" IDENTIFIER "(" parameters ")" ":" type_ bracket_statements {$$ = [$7,$2,"(",$4,")",$8].join(" ");}
     | "class" IDENTIFIER "{" class_statements "}" {$$ = "struct "+$2+"{"+$4+"};";}
     ;
 top_level_statements: top_level_statements top_level_statement {$$ = $1+"\\n"+$2;} | top_level_statement {$$ =
@@ -139,7 +137,7 @@ statement_with_semicolon
    "return" e  {$$ = ["return",$2].join(" ");}
    | "const" IDENTIFIER ":" type_ "=" e {$$ = ["const",$4,$2,"=",$6].join(" ");}
    | access_array "=" e {$$ = [$1,"=",$3].join(" ");}
-   | "var" IDENTIFIER ":" type_ "[" "]" "=" "[" exprs "]" {$$ = $4 + "[] "+$2+" = "+$4+"[]("+$9+")"}
+   | "var" IDENTIFIER ":" type_ "=" e {$$ = $4 + " "+$2+" = "+$6}
    | "const" IDENTIFIER ":" type_ "[" "]" "=" "[" exprs "]" {$$ = "const " + $4 + "[] "+$2+" = "+$4+"[]("+$9+")"}
    | IDENTIFIER "=" e {$$ = [$1,"=",$3].join(" ");}
    | IDENTIFIER "." IDENTIFIER "=" e {$$ = ["set_var",[".",[$1,$3]],$5];}
@@ -151,11 +149,6 @@ statement_with_semicolon
    | IDENTIFIER "/=" e {$$ = [$1,$2,$3].join(" ");}
    | IDENTIFIER "." dot_expr {$$ = $1+"."+$3;}
    ;
-
-initialize_var1: initialize_var_ {$$ = $1;};
-initialize_var: initialize_var_ {$$ = $1;};
-initialize_var_:
-   "var" IDENTIFIER ":" type_ "=" e {$$ = [$4," ",$2,"=",$6].join("");};
 
 e
     :
@@ -243,7 +236,7 @@ parentheses_expr_:
 
 parameter:
 	IDENTIFIER ":" IDENTIFIER {$$ = [$3, $1].join(" ");}
-	| "(" IDENTIFIER ":" IDENTIFIER ")" "=>" IDENTIFIER {$$ = ["function_parameter",$4,$3,$7];};
+	| "(" IDENTIFIER ":" type_ ")" "=>" IDENTIFIER {$$ = ["function_parameter",$4,$3,$7];};
 parameters: parameter "," parameters {$$ = $1+","+$3;} | parameter {$$ =
  $1;} | {$$ = ""};
 exprs: e "," exprs {$$ = $1+","+$3;} | e {$$ = [$1];};
