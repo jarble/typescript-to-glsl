@@ -126,6 +126,7 @@ statement
     statement_with_semicolon ";" {$$ = [$1,";"].join("");}
     | "switch" "(" e ")" "{" case_statements "}" {$$ = ["switch(",$3,"){",$6,"}"].join("");}
     | "while" "(" e ")" bracket_statements {$$ = ["while(",$3,")",$5].join("");}
+    // | "for" "(" "var" IDENTIFIER "of" e ")" bracket_statements {$$ = ["for(int i = 0; i < "+$4+".length(),i++){"+$8+"}"]}
     | "for" "(" statement_with_semicolon_ ";" e ";" statement_with_semicolon_ ")" bracket_statements {$$ = ["for(",$3,";",$5,";",$7,")",$9].join("");}
     | if_statement
     ;
@@ -235,7 +236,7 @@ parentheses_expr_:
         {$$ = yytext;};
 
 parameter:
-	IDENTIFIER ":" IDENTIFIER {$$ = [$3, $1].join(" ");}
+	IDENTIFIER ":" type_ {$$ = [$3, $1].join(" ");}
 	| "(" IDENTIFIER ":" type_ ")" "=>" IDENTIFIER {$$ = ["function_parameter",$4,$3,$7];};
 parameters: parameter "," parameters {$$ = $1+","+$3;} | parameter {$$ =
  $1;} | {$$ = ""};
