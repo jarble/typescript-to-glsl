@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	 <script src="https://unpkg.com/peggy"></script>
+	</head>
+<body onload>
+	
+<h1><a href="https://github.com/jarble/typeScript-to-zig">TypeScript to Zig</a></h1>
+<h2>TypeScript input:</h2>
+<textarea id="my-input" cols="40" rows="5" placeholder="Type something here"></textarea>
+<h2>Zig output:</h2>
+<textarea id="outputText" readonly cols="40" rows="5" placeholder="See output here"></textarea>
+</label>
+<p>You can test the compiled output in the <a href="https://zig-play.dev/">Zig playground.</a></p>
+
+<script>
+		// Get the input box
+const tx = document.getElementsByTagName("textarea");
+for (let i = 0; i < tx.length; i++) {
+  tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
+  tx[i].addEventListener("input", OnInput, false);
+}
+
+function OnInput() {
+  this.style.height = "auto";
+  this.style.height = (this.scrollHeight) + "px";
+}
+
+function updateText(){
+	
+}
+	
+let input = document.getElementById('my-input');
+
+// Init a timeout variable to be used below
+let timeout = null;
+
+
+
+fetch ("typescript_to_zig.peggy")
+.then(x => x.text())
+.then(function(y){
+	const parser = peggy.generate(y);
+		//get hash
+if(window.location.hash){
+	input.value = decodeURI(window.location.hash).substring(1,window.location.hash.length);
+	document.getElementById("outputText").value = parser.parse(input.value);
+}
+
+
+// Listen for keystroke events
+input.addEventListener('keyup', function (e) {
+    // Clear the timeout if it has already been set.
+    // This will prevent the previous task from executing
+    // if it has been less than <MILLISECONDS>
+    clearTimeout(timeout);
+
+    // Make a new timeout set to go off in 1000ms (1 second)
+    timeout = setTimeout(function () {
+        document.getElementById("outputText").value = parser.parse(input.value);
+	    window.location.hash = "#"+encodeURI(input.value);
+    }, 1000);
+});
+});
+
+
+
+		</script>
+</body>
+</html>
