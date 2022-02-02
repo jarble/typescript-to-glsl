@@ -89,10 +89,6 @@ access_modifier= "public" / "private"
 
 class_=
 	"type" __ a:var_name _ "=" _ b:type ";" {return "\n#define "+a+" "+b+"\n";}
-	/ "interface" __ a2:var_name _ "{" _ a4:interface_statements _ "}" {return ["struct ",a2,"{",a4,"};"].join("");}
-	/ "enum" _ name:var_name _ "{" _ a:enum_members (_ "," / _) _ "}" {
-	  return "const "+name+"= enum {"+a+"};"
-	}
 	/ "class" __ name:var_name type_params:(_ "<" _ type_parameters _ ">" _ / "")  super_class:( _ "extends" _ var_name / "") _ "{" _ a4:class_statements _ "}" {
 		class_name = name;
 		let to_return = "";
@@ -139,12 +135,7 @@ statement_
 		if(t1.length > 0){
 			return_type = t1[2]; 
 		}
-		if(type_params.length > 0){
-			return "fn "+name+"("+type_params[2]+",arguments:anytype) "+return_type+"{"+b+c+"}"
-		}
-		else{
-			return "fn "+name+"(arguments:anytype) "+return_type+"{"+b+c+"}"
-		}
+		return return_type+" "+name+"("+b+") "+return_type+"{"+b+c+"}"
 	}
 
 
@@ -160,7 +151,7 @@ identifiers = head:var_name tail:(_ (',') _ var_name)* {
       }, head);
     }
 
-case_statement= "case" __ a2:e _ ":" _ a4:statements _ "break" _ ";" {return [a2,"=>",a4].join("")}
+case_statement= "case" __ a2:e _ ":" _ a4:statements _ "break" _ ";" {return ["case ",a2,":",a4,"break;"].join("")}
 
 case_statements_ = head:case_statement tail:(_ case_statement)* {
       return tail.reduce(function(result, element) {
@@ -170,7 +161,7 @@ case_statements_ = head:case_statement tail:(_ case_statement)* {
 
 case_statements= a1:case_statements_ a2:(_ default_statement / "") {return a1+a2};
 
-default_statement = "default" _ ":" _ a4:statements {return ["else =>",a4].join("")}
+default_statement = "default" _ ":" _ a4:statements {return ["default:",a4].join("")}
 
 statement_with_semicolon
    = 
@@ -181,17 +172,11 @@ statement_with_semicolon
 	}
 		
    / "return"  {return "return";}
-   / ("let" / "var") __ name:var_name _ "=" _ val:e {
-		initial_value[name]=function(){return val;}; return "var " + name+" = "+val;
-   }
-   / "const" __ name:var_name _ "=" _ val:e {
-		initial_value[name]=function(){return val;}; return "const " + name+" = "+val;
-   }
    / ("let" / "var") __ name:var_name _ ":" _ t1:type _ "=" _ val:e {
-		initial_value[name]=function(){return val;}; return "var " + name+":"+t1+" = "+val;
+		initial_value[name]=function(){return val;}; return t1+" " + name + " = "+val;
    }
    / "const" __ name:var_name _ ":" _ t1:type _ "=" _ val:e {
-		initial_value[name]=function(){return val;}; return "const " + name+":"+t1+" = "+val;
+		initial_value[name]=function(){return val;}; return "const " + " "+t1+" = "+val;
    }
    / name:assignable _ a2:"=" _ val:e {
    		initial_value[name]=function(){return val;};
@@ -215,14 +200,14 @@ types = head:type tail:(_ (',') _ type)* {
 
 e
     =
-     a1:e6 _ "?" _ a3:e6 _ ":" _ a5:e {expression_types[a3] = "bool"; return "(if "+a1+" "+a3+" else "+a5+")";}
+     a1:e6 _ "?" _ a3:e6 _ ":" _ a5:e {expression_types[a3] = "bool"; return "("+a1+"?"+a3+":"+a5+")";}
     /e6
 
 
 e6
   = head:e5 tail:(_ ("||") _ e5)* {
       let to_return = tail.reduce(function(result, element) {
-        let to_return = result + " or " + element[3]; expression_types[to_return] = "bool"; expression_types[result] = "bool"; expression_types[element[3]] = "bool"; return to_return;
+        let to_return = result + " || " + element[3]; expression_types[to_return] = "bool"; expression_types[result] = "bool"; expression_types[element[3]] = "bool"; return to_return;
       }, head);
       return to_return;
     }
@@ -230,7 +215,7 @@ e6
 e5
   = head:e4 tail:(_ ("&&") _ e4)* {
       let to_return = tail.reduce(function(result, element) {
-        let to_return = result + " and " + element[3]; expression_types[to_return] = "bool"; expression_types[result] = "bool"; expression_types[element[3]] = "bool"; return to_return;
+        let to_return = result + " && " + element[3]; expression_types[to_return] = "bool"; expression_types[result] = "bool"; expression_types[element[3]] = "bool"; return to_return;
       }, head);
       return to_return;
     }
