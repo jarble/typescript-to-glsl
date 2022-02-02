@@ -293,7 +293,7 @@ access_array_ = "[" _ a:e _ "]" {expression_types[a] = "float"; let to_return = 
 function_call
   = head:callable type_params:("<" _ types _ ">" / "") tail:(_ function_call_ / "") {
 	  var split_head = head.split(".");
-      if(split_head.length === 2 && split_head[0] === "compiled_Math" && (["compiled_sin","compiled_cos","compiled_tan","compiled_sinh","compiled_cosh","compiled_tanh","compiled_abs","compiled_floor","compiled_ceil","compiled_exp","compiled_pow","compiled_log","compiled_log2","compiled_sqrt","compiled_trunc","compiled_sign"].indexOf(split_head[1]) !== -1)){
+      if(split_head.length === 2 && split_head[0] === "compiled_Math" && (["compiled_sin","compiled_asin","compiled_acos","compiled_atan","compiled_asinh","compiled_acosh","compiled_atanh","compiled_min","compiled_max","compiled_cos","compiled_tan","compiled_sinh","compiled_cosh","compiled_tanh","compiled_abs","compiled_floor","compiled_ceil","compiled_exp","compiled_pow","compiled_log","compiled_log2","compiled_sqrt","compiled_trunc","compiled_sign"].indexOf(split_head[1]) !== -1)){
 	      let to_return = split_head[1].substring("compiled_".length,split_head[1].length) + tail[1];
 	      expression_types[to_return] = "float";
 	      return to_return;
