@@ -118,7 +118,7 @@ statement_
     / "while" _ "(" _ a3:e _ ")" _ a5:bracket_statements {return ["while(",a3,"){",a5,"}"].join("");}
     / "do" _ a2:bracket_statements _ "while" _ "(" _ a5:e _ ")" _ ";" {return ["do ",a2," while(",a5,");"].join("");}
     / "switch" _ "(" _ a3:e _ ")" _ "{" _ a6:case_statements _ "}" {return ["switch(",a3,"){",a6,"}"].join("");}
-    / "for" _ "(" _ a3:statement_with_semicolon _ ";" _ a5:e _ ";" _ a7:statement_with_semicolon _ ")" _ a9:bracket_statements {return a3+";"+"while("+a5+"){"+a9+a7+";"+"}";}
+    / "for" _ "(" _ a3:statement_with_semicolon _ ";" _ a5:e _ ";" _ a7:statement_with_semicolon _ ")" _ a9:bracket_statements {return "for("+a3+";"+a5+";"+a7+"){"+a9+"}";}
     / "for" _ "(" _ ("let" / "var") _ item:var_name __ "of" __ the_arr:var_name _ ")" _ body:bracket_statements {
 		if(expression_types[item] !== undefined){
 			expression_types[the_arr] = expression_types[item]+"[]";
@@ -135,7 +135,7 @@ statement_
 		if(t1.length > 0){
 			return_type = t1[2]; 
 		}
-		return return_type+" "+name+"("+b+") "+return_type+"{"+b+c+"}"
+		return return_type+" "+name+"("+b+"){"+c+"}"
 	}
 
 
@@ -191,7 +191,7 @@ statement_with_semicolon
 
 
 type =  t1:type_ "[" "]" {return t1+"[]";} / "Array" "<" t1:type_ ">" {return type+"[]";} / type_
-type_ = name:IDENTIFIER {return name;}
+type_ = name:var_name {return name;}
 types = head:type tail:(_ (',') _ type)* {
       return tail.reduce(function(result, element) {
         return result + element[1] + element[3];
@@ -378,7 +378,7 @@ dot_expr = head:var_name tail:(_ ('.') _ var_name)* {
     }
 
 
-function_parameter = a1:var_name _ ":" _ t1:type {return ["var "+a1+":"+t1];} /
+function_parameter = a1:var_name _ ":" _ t1:type {return [t1+" "+a1];} /
 a1:var_name {return ["var "+a1];}
 
 function_parameters = head:function_parameter tail:(_ (',') _ function_parameter)* {
@@ -386,7 +386,7 @@ function_parameters = head:function_parameter tail:(_ (',') _ function_parameter
         return result.concat(element[3]);
       }, head)).map(function(value,index){initial_value[value]=function(){return "arguments["+index+"]";};
 		  //alert(initial_value[value]);
-		  return value+"=arguments["+index+"];";}).join("");
+		  return value;}).join(",");
     } / "" {return "";}
 
 exprs = head:e tail:(_ (',') _ e)* {
@@ -413,7 +413,7 @@ elif_ = a1:else_if _ "(" _ a3:e _ ")" _ a5:bracket_statements {return "else if("
 
 var_name= name:IDENTIFIER {
 let to_return = "";
-if(name == "this") to_return = "self"; else if(["true","false","undefined","void","break","continue","arguments"].includes(name)) to_return = name; else to_return = (name === "number"?"f64":name==="boolean"?"bool":"compiled_"+name);
+if(name == "this") to_return = "self"; else if(["true","false","undefined","void","break","continue","arguments"].includes(name)) to_return = name; else to_return = (name === "number"?"float":name==="boolean"?"bool":"compiled_"+name);
 if(initial_value[to_return] === undefined){initial_value[to_return] = function(){return to_return;};}
 return to_return;
 }
@@ -423,7 +423,7 @@ bracket_statements= "{" _ a2:statements _ "}" {return a2;} / a1:statement_with_s
 IDENTIFIER = [a-zA-Z_][a-zA-Z0-9_]* {return text();}
 STRING_LITERAL = '"' @$([^"\\] / "\\" .)* '"'
 
-NUMBER = a:Integer b:NUMBER_ {let to_return =  "@as(f64,"+a+"."+b+")"; initial_value[to_return] = function(){return to_return;}; return to_return;}
+NUMBER = a:Integer b:NUMBER_ {let to_return =  a+"."+b; initial_value[to_return] = function(){return to_return;}; return to_return;}
 NUMBER_ = "." a:Integer {return a;} / ("." / "") {return "";}
 
 Integer "integer"
