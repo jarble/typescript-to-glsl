@@ -126,7 +126,7 @@ AssignmentNoSemi
 AssignOp
   = "+=" / "-=" / "*=" / "/=" / "="
 Assignable
-  = IndexAccess / Identifier
+  = MemberAccess / IndexAccess / Identifier
 
 /* --- Return --- */
 ReturnStmt
@@ -194,16 +194,20 @@ UpdateExpr
 /* --- Primary expressions --- */
 Primary
   = "(" _ e:Expression _ ")" { return "("+e+")"; }
-  / ArrayLiteral 
-  / MathCall 
-  / FuncCall 
-  / IndexAccess 
-  / IdentifierDot 
-  / Identifier 
+  / ArrayLiteral
+  / MathCall
+  / FuncCall
+  / MemberAccess
+  / IndexAccess
+  / IdentifierDot
+  / Identifier
   / Number
 
 IndexAccess
   = id:Identifier "[" _ idx:Expression _ "]" { return id+"["+idx+"]"; }
+
+MemberAccess
+  = obj:(IndexAccess / Identifier) "." field:Identifier { return obj+"."+field; }
 
 ArrayLiteral
   = "[" _ elements:ExprList _ "]" { 
