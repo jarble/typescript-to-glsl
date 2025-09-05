@@ -223,9 +223,13 @@ ArrayLiteral
 ExprList
   = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
+/* --- Math calls (fixed whitespace around dot) --- */
 MathCall
-  = "Math." fname:Identifier "(" _ args:ArgList? _ ")" { return mapFunc("Math."+fname+"("+((args||[]).join(","))+")"); }
+  = "Math" _ "." _ fname:Identifier "(" _ args:ArgList? _ ")" { 
+      return mapFunc("Math."+fname+"("+((args||[]).join(","))+")"); 
+    }
 
+/* --- Function calls --- */
 FuncCall
   = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.join(","):"")+")"; }
 
