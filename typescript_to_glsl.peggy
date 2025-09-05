@@ -1,17 +1,30 @@
 {
-  const typeMap = { number:"float", boolean:"bool", vec2:"vec2", vec3:"vec3", vec4:"vec4" };
+  const typeMap = { 
+    number: "float", 
+    boolean: "bool", 
+    vec2: "vec2", 
+    vec3: "vec3", 
+    vec4: "vec4", 
+    string: "float[]"    // convert TypeScript string to GLSL float[]
+  };
+
   const jsFuncMap = {
     "Math.abs":"abs","Math.acos":"acos","Math.asin":"asin","Math.atan":"atan",
     "Math.atan2":"atan","Math.ceil":"ceil","Math.cos":"cos","Math.exp":"exp",
     "Math.floor":"floor","Math.log":"log","Math.max":"max","Math.min":"min",
     "Math.pow":"pow","Math.sin":"sin","Math.sqrt":"sqrt","Math.tan":"tan"
   };
+
   const jsConstMap = { "Math.PI": "3.141592653589793", "Math.E": "2.718281828459045" };
+
+  const glslBuiltIns = ["abs","acos","asin","atan","ceil","cos","exp","floor","log",
+                        "max","min","pow","sin","sqrt","tan","mod","clamp","mix",
+                        "step","smoothstep","length","normalize","dot","cross"];
 
   function mapType(tsType){ 
     if(!tsType) return "float"; 
     if(tsType.endsWith("[]")) return mapType(tsType.slice(0,-2))+"[]"; 
-    return typeMap[tsType]||tsType; 
+    return typeMap[tsType] || tsType; 
   }
 
   function mapFunc(expr){ 
@@ -35,6 +48,20 @@
 
   function emitComment(c){ return c+"\n"; }
   function emitConst(id,expr){ return "#define "+id+" "+expr+"\n"; }
+
+  function compileIdent(id){
+    if(glslBuiltIns.includes(id) || id.endsWith("_compiled")) return id;
+    return id+"_compiled";
+  }
+
+  function formatNumber(n){
+    return n.includes(".") ? n : n+".0";
+  }
+
+  function stringToFloatArray(str){
+    let s = str.slice(1,-1); // remove quotes
+    return "float[](" + Array.from(s).map(c => c.charCodeAt(0)+".0").join(",") + ")";
+  }
 }
 
 /* --- Start --- */
@@ -84,7 +111,7 @@ MultiLineComment
 
 /* --- Constants --- */
 ConstDecl
-  = "const" __ id:Identifier _ "=" _ expr:(ArrayLiteral / MathCall / Number / Assignable) _ ";" { return emitConst(id,expr); }
+  = "const" __ id:Identifier _ "=" _ expr:(ArrayLiteral / MathCall / Number / StringLiteral / Assignable) _ ";" { return emitConst(id,expr); }
 
 /* --- Functions --- */
 FunctionDecl
@@ -183,7 +210,7 @@ Block
 Expression = Comparison
 Comparison
   = left:AddSub tail:(_ CompOp _ AddSub)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
-CompOp = "==" / "!=" / "<=" / ">=" / "<" / ">"
+CompOp = "==" / "!=" / "<=" / ">=" / "<" / ">" / "<"
 AddSub = left:MulDiv tail:(_ ("+" / "-") _ MulDiv)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 MulDiv = left:Unary tail:(_ ("*" / "/") _ Unary)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 
@@ -205,6 +232,7 @@ Primary
   / StructConstructor
   / Assignable
   / IdentifierDot
+  / StringLiteral
   / Identifier
   / Number
 
@@ -236,7 +264,7 @@ FuncCall
 ArgList
   = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
-IdentifierDot = left:Identifier "." right:Identifier { return left+"."+right; }
+IdentifierDot = left:Identifier "." right:Identifier { return left + "." + right; }
 
 /* --- Classes --- */
 ClassDecl
@@ -251,16 +279,17 @@ ClassField
 
 /* --- Types --- */
 Type = base:BaseType arr:("[]")* { return base+arr.join(""); }
-BaseType = "number" / "boolean" / "vec2" / "vec3" / "vec4" / Identifier
+BaseType = "number" / "boolean" / "vec2" / "vec3" / "vec4" / "string" / Identifier
 
 /* --- Assignable expressions --- */
 Assignable
   = base:IdentifierOrCall tail:(_ AccessPart)* {
+      let compiledBase = typeof base === "string" ? base : base;
       return tail.reduce((acc,t)=>{
         const p = t[1];
         if(p.type === "member") return acc + "." + p.name;
         else return acc + "[" + p.index + "]";
-      }, base);
+      }, compiledBase);
     }
 
 IdentifierOrCall
@@ -273,8 +302,12 @@ AccessPart
   = "." name:Identifier { return {type:"member", name}; }
   / "[" _ idx:Expression _ "]" { return {type:"index", index:idx}; }
 
+/* --- String literals --- */
+StringLiteral
+  = s:$("\"" ([^\"]*) "\"") { return stringToFloatArray(s); }
+
 /* --- Tokens --- */
-Identifier = $([a-zA-Z_$][a-zA-Z0-9_$]*)
-Number = $([0-9]+ ("." [0-9]+)?) { return text(); }
+Identifier = $([a-zA-Z_$][a-zA-Z0-9_$]*) { return compileIdent(text()); }
+Number = $([0-9]+ ("." [0-9]+)?) { return formatNumber(text()); }
 _ = [ \t\r\n]*
 __ = [ \t\r\n]+
