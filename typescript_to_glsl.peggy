@@ -111,10 +111,10 @@ IdentifierList
 /* --- Variable Declarations --- */
 TopLevelVarDecl
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
+  / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" { return emitConst(id,expr); }
 
 VarDeclTyped
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
-
 VarDeclNoSemi
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t)+" "+id+" = "+expr; }
 
@@ -126,7 +126,9 @@ AssignmentNoSemi
 AssignOp
   = "+=" / "-=" / "*=" / "/=" / "="
 Assignable
-  = MemberAccess / IndexAccess / Identifier
+  = MemberAccess
+  / IndexAccess
+  / Identifier
 
 /* --- Return --- */
 ReturnStmt
@@ -206,9 +208,13 @@ Primary
 IndexAccess
   = id:Identifier "[" _ idx:Expression _ "]" { return id+"["+idx+"]"; }
 
+/* --- Recursive member access for chained access --- */
 MemberAccess
-  = obj:(IndexAccess / Identifier) "." field:Identifier { return obj+"."+field; }
+  = base:(IndexAccess / Identifier) tail:("." Identifier / ("[" _ Expression _ "]"))+ {
+      return tail.reduce((acc,t) => t[0]==="."?acc+"."+t[1]:acc+"["+t[2]+"]", base);
+    }
 
+/* --- Array literals --- */
 ArrayLiteral
   = "[" _ elements:ExprList _ "]" { 
       if(elements.length>0 && elements.every(e=>typeof e==="string" && e.startsWith("float[]("))) return flatten2DArray(elements); 
