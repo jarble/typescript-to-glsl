@@ -55,6 +55,7 @@ TopLevelItem
   / AssignmentStmt
   / ForStmt
   / WhileStmt
+  / DoWhileStmt
   / SwitchStmt
 
 /* --- Statements inside functions --- */
@@ -68,6 +69,7 @@ Statement
   / Block
   / ForStmt
   / WhileStmt
+  / DoWhileStmt
   / SwitchStmt
 
 /* --- Comments --- */
@@ -82,7 +84,7 @@ MultiLineComment
 
 /* --- Constants --- */
 ConstDecl
-  = "const" __ id:Identifier _ "=" _ expr:(ArrayLiteral / MathCall / Number / IdentifierDot / Identifier) _ ";" { return emitConst(id,expr); }
+  = "const" __ id:Identifier _ "=" _ expr:(ArrayLiteral / MathCall / Number / Assignable) _ ";" { return emitConst(id,expr); }
 
 /* --- Functions --- */
 FunctionDecl
@@ -115,20 +117,18 @@ TopLevelVarDecl
 
 VarDeclTyped
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
-VarDeclNoSemi
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t)+" "+id+" = "+expr; }
+
+/* --- Variable/assignment without semicolon for for-loop --- */
+VarDeclTypedNoSemi
+  = ("var" / "let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t) + " " + id + " = " + expr; }
+AssignmentNoSemi
+  = id:Assignable _ op:AssignOp _ expr:Expression { return id + " " + op + " " + expr; }
 
 /* --- Assignments --- */
 AssignmentStmt
   = id:Assignable _ op:AssignOp _ expr:Expression _ ";" { return id+" "+op+" "+expr+";"; }
-AssignmentNoSemi
-  = id:Assignable _ op:AssignOp _ expr:Expression { return id+" "+op+" "+expr; }
 AssignOp
   = "+=" / "-=" / "*=" / "/=" / "="
-Assignable
-  = MemberAccess
-  / IndexAccess
-  / Identifier
 
 /* --- Return --- */
 ReturnStmt
@@ -158,12 +158,15 @@ CaseClause
 
 /* --- Loops --- */
 ForStmt
-  = "for" _ "(" _ init:(VarDeclNoSemi / VarDeclTyped / AssignmentNoSemi / Expression)? _ ";" _ cond:Expression? _ ";" _ update:(UpdateExpr / AssignmentNoSemi / Expression)? _ ")" _ body:Block {
+  = "for" _ "(" _ init:(VarDeclTypedNoSemi / AssignmentNoSemi / Expression)? _ ";" _ cond:Expression? _ ";" _ update:(UpdateExpr / AssignmentNoSemi / Expression)? _ ")" _ body:Block {
       return "for("+(init||"")+";"+(cond||"")+";"+(update||"")+") "+body;
     }
 
 WhileStmt
   = "while" _ "(" _ cond:Expression _ ")" _ body:Block { return "while("+cond+") "+body; }
+
+DoWhileStmt
+  = "do" _ body:Block _ "while" _ "(" _ cond:Expression _ ")" _ ";" { return "do "+body+" while("+cond+");"; }
 
 /* --- Expression statements --- */
 ExprStmt
@@ -199,22 +202,18 @@ Primary
   / ArrayLiteral
   / MathCall
   / FuncCall
-  / MemberAccess
-  / IndexAccess
+  / StructConstructor
+  / Assignable
   / IdentifierDot
   / Identifier
   / Number
 
-IndexAccess
-  = id:Identifier "[" _ idx:Expression _ "]" { return id+"["+idx+"]"; }
-
-/* --- Recursive member access for chained access --- */
-MemberAccess
-  = base:(IndexAccess / Identifier) tail:("." Identifier / ("[" _ Expression _ "]"))+ {
-      return tail.reduce((acc,t) => t[0]==="."?acc+"."+t[1]:acc+"["+t[2]+"]", base);
+StructConstructor
+  = id:Identifier "(" _ args:ArgList? _ ")" { 
+      return id+"("+(args?args.join(","):"")+")"; 
     }
 
-/* --- Array literals --- */
+/* --- Arrays --- */
 ArrayLiteral
   = "[" _ elements:ExprList _ "]" { 
       if(elements.length>0 && elements.every(e=>typeof e==="string" && e.startsWith("float[]("))) return flatten2DArray(elements); 
@@ -249,6 +248,26 @@ ClassField
 /* --- Types --- */
 Type = base:BaseType arr:("[]")* { return base+arr.join(""); }
 BaseType = "number" / "boolean" / "vec2" / "vec3" / "vec4" / Identifier
+
+/* --- Assignable expressions --- */
+Assignable
+  = base:IdentifierOrCall tail:(_ AccessPart)* {
+      return tail.reduce((acc,t)=>{
+        const p = t[1];
+        if(p.type === "member") return acc + "." + p.name;
+        else return acc + "[" + p.index + "]";
+      }, base);
+    }
+
+IdentifierOrCall
+  = StructConstructor
+  / FuncCall
+  / IdentifierDot
+  / Identifier
+
+AccessPart
+  = "." name:Identifier { return {type:"member", name}; }
+  / "[" _ idx:Expression _ "]" { return {type:"index", index:idx}; }
 
 /* --- Tokens --- */
 Identifier = $([a-zA-Z_$][a-zA-Z0-9_$]*)
