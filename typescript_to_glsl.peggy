@@ -6,11 +6,33 @@
     "Math.floor":"floor","Math.log":"log","Math.max":"max","Math.min":"min",
     "Math.pow":"pow","Math.sin":"sin","Math.sqrt":"sqrt","Math.tan":"tan"
   };
-  const jsConstMap = { "Math.PI": "3.141592653589793", "Math.E": "2.718281828459045" };
+
+  const jsConstMap = {
+    "Math.E": "(exp(1.0))",
+    "Math.LN2": "(log(2.0))",
+    "Math.LN10": "(log(10.0))",
+    "Math.LOG2E": "(1.0/log(2.0))",
+    "Math.LOG10E": "(1.0/log(10.0))",
+    "Math.PI": "(4.0*atan(1.0))",
+    "Math.SQRT1_2": "(sqrt(0.5))",
+    "Math.SQRT2": "(sqrt(2.0))"
+  };
+
   const glslBuiltIns = ["abs","acos","asin","atan","ceil","cos","exp","floor","log","max","min","pow","sin","sqrt","tan","mod","clamp","mix","step","smoothstep","length","normalize","dot","cross"];
 
   function mapType(tsType){ if(!tsType) return "float"; if(tsType.endsWith("[]")) return mapType(tsType.slice(0,-2))+"[]"; return typeMap[tsType] || tsType; }
-  function mapFunc(expr){ for(const k in jsFuncMap){ if(expr.startsWith(k+"(")){ const args=expr.slice(k.length+1,expr.length-1); return jsFuncMap[k]+"("+args+")"; } } if(jsConstMap[expr]) return jsConstMap[expr]; return expr; }
+
+  function mapFunc(expr){
+    for(const k in jsFuncMap){
+      if(expr.startsWith(k+"(")){
+        const args = expr.slice(k.length+1,expr.length-1);
+        return jsFuncMap[k]+"("+args+")";
+      }
+    }
+    if(jsConstMap[expr]) return jsConstMap[expr];
+    return expr;
+  }
+
   function emitComment(c){ return c+"\n"; }
   function emitConst(id,expr){ return "#define "+id+" "+expr+"\n"; }
   function compileIdent(id){ if(glslBuiltIns.includes(id) || id.endsWith("_compiled")) return id; return id+"_compiled"; }
@@ -48,7 +70,7 @@ TopLevelVarDecl
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
   / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define "+id+" "+expr+"\n"; }
 
-/* --- Function-scope variable declarations (type required) --- */
+/* --- Function-scope variable declarations --- */
 VarDecl
   = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
 VarDeclNoSemi
@@ -132,7 +154,17 @@ ExprList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tai
 MathCall = "Math" _ "." _ fname:Identifier "(" _ args:ArgList? _ ")" { return mapFunc("Math."+fname+"("+((args||[]).join(","))+")"); }
 FuncCall = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.join(","):"")+")"; }
 ArgList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
-IdentifierDot = left:Identifier "." right:Identifier { return left + "." + right; }
+
+/* --- Identifiers and dot-access (constants handled) --- */
+Identifier = id:$([a-zA-Z_$][a-zA-Z0-9_$]*) { return id; }
+
+IdentifierDot = left:Identifier "." right:Identifier {
+  const full = left + "." + right;
+  if(jsConstMap[full]) return jsConstMap[full];
+  const l = glslBuiltIns.includes(left) ? left : left+"_compiled";
+  const r = glslBuiltIns.includes(right) ? right : right+"_compiled";
+  return l + "." + r;
+}
 
 /* --- Classes --- */
 ClassDecl = "class" __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" { const allFields = fields ? [fields[0]].concat(fields[1].map(t=>t[1])) : []; const members = allFields.map(f => mapType(f.type)+" "+f.name+";").join("\n"); return "typedef struct {\n"+members+"\n} "+id+";\n"; }
@@ -153,8 +185,9 @@ StringLiteral = s:$("\"" ([^\"]*) "\"") { return stringToFloatArray(s); }
 /* --- Expression statements --- */
 ExprStmt = expr:Expression _ ";" { return expr+";"; }
 
-/* --- Tokens --- */
-Identifier = $([a-zA-Z_$][a-zA-Z0-9_$]*) { return compileIdent(text()); }
-Number = $([0-9]+ ("." [0-9]+)?) { return formatNumber(text()); }
+/* --- Numbers --- */
+Number = n:$([0-9]+ ("." [0-9]+)?) { return formatNumber(text()); }
+
+/* --- Whitespace --- */
 _ = [ \t\r\n]*
 __ = [ \t\r\n]+
