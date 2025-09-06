@@ -34,7 +34,6 @@
   }
 
   function emitComment(c){ return c+"\n"; }
-  function emitConst(id,expr){ return "#define "+id+" "+expr+"\n"; }
   function compileIdent(id){ if(glslBuiltIns.includes(id) || id.endsWith("_compiled")) return id; return id+"_compiled"; }
   function formatNumber(n){ return n.includes(".") ? n : n+".0"; }
   function stringToFloatArray(str){ let s = str.slice(1,-1); return "float[](" + Array.from(s).map(c => c.charCodeAt(0)+".0").join(",") + ")"; }
@@ -47,7 +46,34 @@ Start = _ items:(TopLevelItem (_ TopLevelItem)*)? _ { let all = items ? [items[0
 TopLevelItem = CommentStmt / ClassDecl / FunctionDecl / JSFunction / ConstDecl / TopLevelVarDecl / AssignmentStmt / AssignmentNoSemi / IfStmt / ForStmt / WhileStmt / DoWhileStmt / SwitchStmt / ExprStmt
 
 /* --- Statements --- */
-Statement = CommentStmt / VarDecl / AssignmentStmt / ReturnStmt / IfStmt / ExprStmt / Block / ForStmt / WhileStmt / DoWhileStmt / SwitchStmt
+Statement
+  = CommentStmt
+  / ConstStmt
+  / VarDecl
+  / AssignmentStmt
+  / ReturnStmt
+  / IfStmt
+  / ExprStmt
+  / Block
+  / ForStmt
+  / WhileStmt
+  / DoWhileStmt
+  / SwitchStmt
+
+/* --- Top-level const --- */
+ConstDecl
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t) + " " + id + " = " + expr + ";";
+  }
+  / "const" __ id:Identifier _ "=" _ expr:Expression _ ";" {
+      return "#define " + id + " " + expr + "\n";
+  }
+
+/* --- Function-scope const --- */
+ConstStmt
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t) + " " + id + " = " + expr + ";";
+  }
 
 /* --- Block --- */
 Block
@@ -61,9 +87,6 @@ CommentStmt = c:Comment { return emitComment(c); }
 Comment = SingleLineComment / MultiLineComment
 SingleLineComment = c:$("//" [^\r\n]*) { return c; }
 MultiLineComment = c:$("/*" (!"*/" .)* "*/") { return c; }
-
-/* --- Constants --- */
-ConstDecl = "const" __ id:Identifier _ "=" _ expr:(ArrayLiteral / MathCall / Number / StringLiteral / Assignable) _ ";" { return emitConst(id,expr); }
 
 /* --- Top-level variable declarations --- */
 TopLevelVarDecl
@@ -147,7 +170,16 @@ Primary = "(" _ e:Expression _ ")" { return "("+e+")"; } / ArrayLiteral / MathCa
 StructConstructor = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.join(","):"")+")"; }
 
 /* --- Arrays --- */
-ArrayLiteral = "[" _ elements:ExprList _ "]" { return {type:"array", elements: elements}; }
+ArrayLiteral
+  = "[" _ elements:ExprList _ "]" {
+      const elems = elements.join(", ");
+      switch(elements.length){
+        case 2: return `vec2(${elems})`;
+        case 3: return `vec3(${elems})`;
+        case 4: return `vec4(${elems})`;
+        default: return `float[](${elems})`;
+      }
+  }
 ExprList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Math calls --- */
@@ -157,7 +189,6 @@ ArgList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail
 
 /* --- Identifiers and dot-access (constants handled) --- */
 Identifier = id:$([a-zA-Z_$][a-zA-Z0-9_$]*) { return id; }
-
 IdentifierDot = left:Identifier "." right:Identifier {
   const full = left + "." + right;
   if(jsConstMap[full]) return jsConstMap[full];
