@@ -43,7 +43,7 @@
 Start = _ items:(TopLevelItem (_ TopLevelItem)*)? _ { let all = items ? [items[0]].concat(items[1].map(t=>t[1])) : []; return all.join("\n"); }
 
 /* --- Top-level items --- */
-TopLevelItem = CommentStmt / ClassDecl / FunctionDecl / JSFunction / ConstDecl / TopLevelVarDecl / AssignmentStmt / AssignmentNoSemi / IfStmt / ForStmt / WhileStmt / DoWhileStmt / SwitchStmt / ExprStmt
+TopLevelItem = CommentStmt / ClassOrInterfaceDecl / FunctionDecl / JSFunction / ConstDecl / TopLevelVarDecl / AssignmentStmt / AssignmentNoSemi / IfStmt / ForStmt / WhileStmt / DoWhileStmt / SwitchStmt / ExprStmt
 
 /* --- Statements --- */
 Statement
@@ -101,19 +101,11 @@ VarDeclNoSemi
 
 /* --- Assignment --- */
 AssignmentStmt
-  = lhs:DestructuringOrAssignable _ op:AssignOp _ rhs:Expression _ ";" {
-      let right = typeof rhs === "string" ? rhs : rhs;
-      if(lhs.type === "destructuring" && rhs.type === "array") {
-        return lhs.names.map((name,i)=>name+" = "+rhs.elements[i]+";").join("\n");
-      }
-      return lhs.code + " " + op + " " + right + ";";
+  = lhs:Assignable _ op:AssignOp _ rhs:Expression _ ";" {
+      return lhs + " " + op + " " + rhs + ";";
   }
 AssignmentNoSemi = id:Assignable _ op:AssignOp _ expr:Expression { return id + " " + op + " " + expr; }
 AssignOp = "+=" / "-=" / "*=" / "/=" / "="
-
-/* --- Destructuring --- */
-DestructuringOrAssignable = d:DestructuringPattern { return {type:"destructuring", names:d}; } / a:Assignable { return {type:"assignable", code:a}; }
-DestructuringPattern = "[" _ head:Identifier tail:(_ "," _ Identifier)* _ "]" { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Return --- */
 ReturnStmt = "return" __ expr:Expression _ ";" { return "return "+expr+";" }
@@ -197,8 +189,14 @@ IdentifierDot = left:Identifier "." right:Identifier {
   return l + "." + r;
 }
 
-/* --- Classes --- */
-ClassDecl = "class" __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" { const allFields = fields ? [fields[0]].concat(fields[1].map(t=>t[1])) : []; const members = allFields.map(f => mapType(f.type)+" "+f.name+";").join("\n"); return "typedef struct {\n"+members+"\n} "+id+";\n"; }
+/* --- Classes and Interfaces --- */
+ClassOrInterfaceDecl
+  = kw:("class" / "interface") __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" {
+      const allFields = fields ? [fields[0]].concat(fields[1].map(t=>t[1])) : [];
+      const members = allFields.map(f => mapType(f.type)+" "+f.name+";").join("\n");
+      return "typedef struct {\n"+members+"\n} "+id+";\n";
+  }
+
 ClassField = _ id:Identifier _ ":" _ t:Type _ ";" { return {name:id, type:t}; }
 
 /* --- Types --- */
