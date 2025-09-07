@@ -5,7 +5,6 @@ Still a work-in-progress.
 ## TypeScript input:
 ```
 // --- Top-level constants and variables ---
-[a,b] = [1,2];
 const PI = Math.PI;
 var a = "Hello";
 a[0] /= 1;
