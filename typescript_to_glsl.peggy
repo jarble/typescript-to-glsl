@@ -6,7 +6,6 @@
     "Math.floor":"floor","Math.log":"log","Math.max":"max","Math.min":"min",
     "Math.pow":"pow","Math.sin":"sin","Math.sqrt":"sqrt","Math.tan":"tan"
   };
-
   const jsConstMap = {
     "Math.E": "(exp(1.0))",
     "Math.LN2": "(log(2.0))",
@@ -17,26 +16,14 @@
     "Math.SQRT1_2": "(sqrt(0.5))",
     "Math.SQRT2": "(sqrt(2.0))"
   };
-
-  const glslBuiltIns = ["abs","acos","asin","atan","ceil","cos","exp","floor","log","max","min","pow","sin","sqrt","tan","mod","clamp","mix","step","smoothstep","length","normalize","dot","cross"];
+  const glslBuiltIns = ["abs","acos","asin","atan","ceil","cos","exp","floor","log","max","min","pow","sin","sqrt","tan","mod","clamp","mix","step","smoothstep","length","normalize","dot","cross","true","false"];
 
   function mapType(tsType){ if(!tsType) return "float"; if(tsType.endsWith("[]")) return mapType(tsType.slice(0,-2))+"[]"; return typeMap[tsType] || tsType; }
-
-  function mapFunc(expr){
-    for(const k in jsFuncMap){
-      if(expr.startsWith(k+"(")){
-        const args = expr.slice(k.length+1,expr.length-1);
-        return jsFuncMap[k]+"("+args+")";
-      }
-    }
-    if(jsConstMap[expr]) return jsConstMap[expr];
-    return expr;
-  }
-
+  function mapFunc(expr){ for(const k in jsFuncMap){ if(expr.startsWith(k+"(")){ const args = expr.slice(k.length+1,expr.length-1); return jsFuncMap[k]+"("+args+")"; } } if(jsConstMap[expr]) return jsConstMap[expr]; return expr; }
   function emitComment(c){ return c+"\n"; }
-  function compileIdent(id){ if(glslBuiltIns.includes(id) || id.endsWith("_compiled")) return id; return id+"_compiled"; }
   function formatNumber(n){ return n.includes(".") ? n : n+".0"; }
   function stringToFloatArray(str){ let s = str.slice(1,-1); return "float[](" + Array.from(s).map(c => c.charCodeAt(0)+".0").join(",") + ")"; }
+  function compileIdent(id){ return glslBuiltIns.includes(id) ? id : id+"_compiled"; }
 }
 
 /* --- Start --- */
@@ -62,25 +49,16 @@ Statement
 
 /* --- Top-level const --- */
 ConstDecl
-  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
-      return mapType(t) + " " + id + " = " + expr + ";";
-  }
-  / "const" __ id:Identifier _ "=" _ expr:Expression _ ";" {
-      return "#define " + id + " " + expr + "\n";
-  }
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t) + " " + compileIdent(id) + " = " + expr + ";"; }
+  / "const" __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define " + compileIdent(id) + " " + expr + "\n"; }
 
 /* --- Function-scope const --- */
 ConstStmt
-  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
-      return mapType(t) + " " + id + " = " + expr + ";";
-  }
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t) + " " + compileIdent(id) + " = " + expr + ";"; }
 
 /* --- Block --- */
 Block
-  = "{" _ stmts:(Statement (_ Statement)*)? _ "}" { 
-      let allStmts = stmts ? [stmts[0]].concat(stmts[1].map(t=>t[1])) : []; 
-      return "{\n" + allStmts.join("\n") + "\n}";
-  }
+  = "{" _ stmts:(Statement (_ Statement)*)? _ "}" { let allStmts = stmts ? [stmts[0]].concat(stmts[1].map(t=>t[1])) : []; return "{\n" + allStmts.join("\n") + "\n}"; }
 
 /* --- Comments --- */
 CommentStmt = c:Comment { return emitComment(c); }
@@ -90,20 +68,18 @@ MultiLineComment = c:$("/*" (!"*/" .)* "*/") { return c; }
 
 /* --- Top-level variable declarations --- */
 TopLevelVarDecl
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
-  / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define "+id+" "+expr+"\n"; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+compileIdent(id)+" = "+expr+";"; }
+  / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define "+compileIdent(id)+" "+expr+"\n"; }
 
 /* --- Function-scope variable declarations --- */
 VarDecl
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+id+" = "+expr+";"; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+compileIdent(id)+" = "+expr+";"; }
 VarDeclNoSemi
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t)+" "+id+" = "+expr; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t)+" "+compileIdent(id)+" = "+expr; }
 
 /* --- Assignment --- */
 AssignmentStmt
-  = lhs:Assignable _ op:AssignOp _ rhs:Expression _ ";" {
-      return lhs + " " + op + " " + rhs + ";";
-  }
+  = lhs:Assignable _ op:AssignOp _ rhs:Expression _ ";" { return lhs + " " + op + " " + rhs + ";"; }
 AssignmentNoSemi = id:Assignable _ op:AssignOp _ expr:Expression { return id + " " + op + " " + expr; }
 AssignOp = "+=" / "-=" / "*=" / "/=" / "="
 
@@ -125,53 +101,42 @@ DoWhileStmt = "do" _ body:Block _ "while" _ "(" _ cond:Expression _ ")" _ ";" { 
 
 /* --- Function declarations --- */
 FunctionDecl
-  = "function" __ id:Identifier _ "(" _ params:ParamList? _ ")" _ ":" _ ret:Type _ _ body:Block {
-      const ps = params ? params.join(", ") : "";
-      return mapType(ret) + " " + id + "(" + ps + ") " + body;
-  }
+  = "function" __ id:Identifier _ "(" _ params:ParamList? _ ")" _ ":" _ ret:Type _ _ body:Block { const ps = params ? params.join(", ") : ""; return mapType(ret) + " " + compileIdent(id) + "(" + ps + ") " + body; }
 
 /* --- JS macro-style functions --- */
 JSFunction
-  = "function" __ id:Identifier _ "(" _ params:IdentifierList? _ ")" _ "{" _ body:MacroBody _ "}" {
-      const ps = params?params.join(","):""; 
-      return "#define "+id+"("+ps+") "+body+"\n";
-  }
+  = "function" __ id:Identifier _ "(" _ params:IdentifierList? _ ")" _ "{" _ body:MacroBody _ "}" { const ps = params?params.join(","):""; return "#define "+compileIdent(id)+"("+ps+") "+body+"\n"; }
 MacroBody = "return" __ expr:Expression _ ";" { return expr; }
 
 /* --- Parameters --- */
 ParamList = head:Param tail:(_ "," _ Param)* { return [head].concat(tail.map(t=>t[3])); }
-Param = id:Identifier _ ":" _ t:Type { return mapType(t)+" "+id; }
+Param = id:Identifier _ ":" _ t:Type { return mapType(t) + " " + compileIdent(id); }
 IdentifierList = head:Identifier tail:(_ "," _ Identifier)* { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Expressions --- */
-Expression = Comparison
+Expression = LogicalOr
+LogicalOr = left:LogicalAnd tail:(_ "||" _ LogicalAnd)* { return tail.reduce((acc,t) => acc + " || " + t[3], left); }
+LogicalAnd = left:Comparison tail:(_ "&&" _ Comparison)* { return tail.reduce((acc,t) => acc + " && " + t[3], left); }
 Comparison = left:AddSub tail:(_ CompOp _ AddSub)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 CompOp = "==" / "!=" / "<=" / ">=" / "<" / ">"
 AddSub = left:MulDiv tail:(_ ("+" / "-") _ MulDiv)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 MulDiv = left:Power tail:(_ ("*" / "/") _ Power)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
-
-/* --- Power converted to pow() --- */
 Power = left:Unary tail:(_ "**" _ Unary)* { return tail.reduce((acc,t) => "pow("+acc+", "+t[3]+")", left); }
-
-Unary = "-" _ v:Unary { return "-"+v; } / UpdateExpr / Ternary / Primary
+Unary = "!" _ v:Unary { return "!" + v; } / "-" _ v:Unary { return "-" + v; } / UpdateExpr / Ternary / Primary
 UpdateExpr = id:Assignable op:("++" / "--") { return id+op; }
 Ternary = cond:Primary _ "?" _ tExpr:Expression _ ":" _ fExpr:Expression { return cond+" ? "+tExpr+" : "+fExpr; }
 
 /* --- Primary expressions --- */
-Primary = "(" _ e:Expression _ ")" { return "("+e+")"; } / ArrayLiteral / MathCall / FuncCall / StructConstructor / Assignable / IdentifierDot / StringLiteral / Identifier / Number
-StructConstructor = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.join(","):"")+")"; }
+Primary = "true" { return "true"; } / "false" { return "false"; } / "(" _ e:Expression _ ")" { return "(" + e + ")"; } / ArrayLiteral / MathCall / FuncCall / NewExpr / StructConstructor / Assignable / IdentifierDot / StringLiteral / Identifier / Number
+
+/* --- New operator --- */
+NewExpr = "new" __ id:Identifier "(" _ args:ArgList? _ ")" { return compileIdent(id) + "(" + (args ? args.join(",") : "") + ")"; }
+
+/* --- Struct constructors --- */
+StructConstructor = id:Identifier "(" _ args:ArgList? _ ")" { return compileIdent(id)+"("+(args?args.join(","):"")+")"; }
 
 /* --- Arrays --- */
-ArrayLiteral
-  = "[" _ elements:ExprList _ "]" {
-      const elems = elements.join(", ");
-      switch(elements.length){
-        case 2: return `vec2(${elems})`;
-        case 3: return `vec3(${elems})`;
-        case 4: return `vec4(${elems})`;
-        default: return `float[](${elems})`;
-      }
-  }
+ArrayLiteral = "[" _ elements:ExprList _ "]" { const elems = elements.join(", "); switch(elements.length){ case 2: return `vec2(${elems})`; case 3: return `vec3(${elems})`; case 4: return `vec4(${elems})`; default: return `float[](${elems})`; } }
 ExprList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Math calls --- */
@@ -179,34 +144,11 @@ MathCall = "Math" _ "." _ fname:Identifier "(" _ args:ArgList? _ ")" { return ma
 FuncCall = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.join(","):"")+")"; }
 ArgList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
-/* --- Identifiers and dot-access (constants handled) --- */
-Identifier = id:$([a-zA-Z_$][a-zA-Z0-9_$]*) { return id; }
-IdentifierDot = left:Identifier "." right:Identifier {
-  const full = left + "." + right;
-  if(jsConstMap[full]) return jsConstMap[full];
-  const l = glslBuiltIns.includes(left) ? left : left+"_compiled";
-  const r = glslBuiltIns.includes(right) ? right : right+"_compiled";
-  return l + "." + r;
-}
-
-/* --- Classes and Interfaces --- */
-ClassOrInterfaceDecl
-  = kw:("class" / "interface") __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" {
-      const allFields = fields ? [fields[0]].concat(fields[1].map(t=>t[1])) : [];
-      const members = allFields.map(f => mapType(f.type)+" "+f.name+";").join("\n");
-      return "typedef struct {\n"+members+"\n} "+id+";\n";
-  }
-
-ClassField = _ id:Identifier _ ":" _ t:Type _ ";" { return {name:id, type:t}; }
-
-/* --- Types --- */
-Type = base:BaseType arr:("[]")* { return base+arr.join(""); }
-BaseType = "number" / "boolean" / "vec2" / "vec3" / "vec4" / "string" / Identifier
-
-/* --- Assignable --- */
-Assignable = base:IdentifierOrCall tail:(_ AccessPart)* { let compiledBase = typeof base === "string" ? base : base; return tail.reduce((acc,t)=>{ const p = t[1]; if(p.type === "member") return acc + "." + p.name; else return acc + "[" + p.index + "]"; }, compiledBase); }
-IdentifierOrCall = StructConstructor / FuncCall / IdentifierDot / Identifier
+/* --- Assignable / dot-access --- */
+Assignable = base:IdentifierOrCall tail:(_ AccessPart)* { return tail.reduce((acc,t)=>{ const p=t[1]; return p.type==="member"?acc+"."+p.name:acc+"["+p.index+"]"; }, base); }
+IdentifierOrCall = NewExpr / StructConstructor / FuncCall / IdentifierDot / Identifier
 AccessPart = "." name:Identifier { return {type:"member", name}; } / "[" _ idx:Expression _ "]" { return {type:"index", index:idx}; }
+IdentifierDot = left:Identifier "." right:Identifier { return left+"."+right; }
 
 /* --- String literals --- */
 StringLiteral = s:$("\"" ([^\"]*) "\"") { return stringToFloatArray(s); }
@@ -216,6 +158,17 @@ ExprStmt = expr:Expression _ ";" { return expr+";"; }
 
 /* --- Numbers --- */
 Number = n:$([0-9]+ ("." [0-9]+)?) { return formatNumber(text()); }
+
+/* --- Classes and Interfaces --- */
+ClassOrInterfaceDecl = kw:("class"/"interface") __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" { const allFields = fields?[fields[0]].concat(fields[1].map(t=>t[1])):[]; const members = allFields.map(f=>mapType(f.type)+" "+f.name+";").join("\n"); return "typedef struct {\n"+members+"\n} "+compileIdent(id)+";\n"; }
+ClassField = _ id:Identifier _ ":" _ t:Type _ ";" { return {name:id,type:t}; }
+
+/* --- Types --- */
+Type = base:BaseType arr:("[]")* { return base+arr.join(""); }
+BaseType = "number" / "boolean" / "vec2" / "vec3" / "vec4" / "string" / Identifier
+
+/* --- Identifier --- */
+Identifier = id:$([a-zA-Z_$][a-zA-Z0-9_$]*) { return id; }
 
 /* --- Whitespace --- */
 _ = [ \t\r\n]*
