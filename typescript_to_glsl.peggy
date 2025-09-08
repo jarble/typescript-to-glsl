@@ -70,12 +70,11 @@
       if(expr.startsWith(k+"(")){
         const args = expr.slice(k.length+1,expr.length-1);
         switch(k){
-          // Only expand functions GLSL lacks natively
           case "Math.hypot": return "(length(vec" + args.split(",").length + "(" + args + ")))";
           case "Math.cbrt": return "(pow(" + args + ", 1.0/3.0))";
           case "Math.expm1": return "((exp(" + args + ")) - 1.0)";
           case "Math.log1p": return "(log(1.0 + (" + args + ")))";
-          default: return jsFuncMap[k]+"("+args+")"; // GLSL built-ins pass through
+          default: return jsFuncMap[k]+"("+args+")";
         }
       }
     }
@@ -105,6 +104,7 @@ TopLevelItem
   = CommentStmt
   / ClassOrInterfaceDecl
   / TypeAliasDecl
+  / EnumDecl
   / FunctionDecl
   / JSFunction
   / ConstDecl
@@ -128,6 +128,24 @@ TypeAliasDecl
         return "#define " + compileIdent(id) + " " + mapType(t);
       }
     }
+
+/* --- Enums --- */
+EnumDecl
+  = "enum" __ id:Identifier _ "{" _ members:EnumMemberList? _ "}" {
+      const mems = members || [];
+      let lines = mems.map((m, idx) => {
+        const val = m.value !== null ? m.value : idx;
+        return "#define " + compileIdent(m.name) + " " + val;
+      });
+      return lines.join("\n");
+    }
+
+EnumMemberList
+  = head:EnumMember tail:(_ "," _ EnumMember)* _ ","? { return [head].concat(tail.map(t=>t[3])); }
+
+EnumMember
+  = name:Identifier _ "=" _ value:Number { return {name, value:parseFloat(value)}; }
+  / name:Identifier { return {name, value:null}; }
 
 /* --- Statements --- */
 Statement
@@ -257,14 +275,26 @@ IdentifierList = head:Identifier tail:(_ "," _ Identifier)* { return [head].conc
 
 /* --- Expressions --- */
 Expression = LogicalOr
-LogicalOr = left:LogicalAnd tail:(_ "||" _ LogicalAnd)* { return tail.reduce((acc,t) => acc + " || " + t[3], left); }
-LogicalAnd = left:Comparison tail:(_ "&&" _ Comparison)* { return tail.reduce((acc,t) => acc + " && " + t[3], left); }
-Comparison = left:AddSub tail:(_ CompOp _ AddSub)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
+LogicalOr = left:LogicalAnd tail:(_ "||" _ LogicalAnd)* { return tail.reduce((acc,t)=>acc+" || "+t[3], left); }
+LogicalAnd = left:Comparison tail:(_ "&&" _ Comparison)* { return tail.reduce((acc,t)=>acc+" && "+t[3], left); }
+Comparison = left:BitwiseOr tail:(_ CompOp _ BitwiseOr)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 CompOp = "==" / "!=" / "<=" / ">=" / "<" / ">"
+
+BitwiseOr = left:BitwiseXor tail:(_ "|" _ BitwiseXor)* { return tail.reduce((acc,t)=>acc+" | "+t[3], left); }
+BitwiseXor = left:BitwiseAnd tail:(_ "^" _ BitwiseAnd)* { return tail.reduce((acc,t)=>acc+" ^ "+t[3], left); }
+BitwiseAnd = left:Shift tail:(_ "&" _ Shift)* { return tail.reduce((acc,t)=>acc+" & "+t[3], left); }
+Shift = left:AddSub tail:(_ ("<<" / ">>") _ AddSub)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
+
 AddSub = left:MulDiv tail:(_ ("+" / "-") _ MulDiv)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 MulDiv = left:Power tail:(_ ("*" / "/") _ Power)* { return tail.reduce((acc,t)=>acc+" "+t[1]+" "+t[3], left); }
 Power = left:Unary tail:(_ "**" _ Unary)* { return tail.reduce((acc,t) => "pow("+acc+", "+t[3]+")", left); }
-Unary = "!" _ v:Unary { return "!" + v; } / "-" _ v:Unary { return "-" + v; } / UpdateExpr / Ternary / Primary
+
+Unary = "!" _ v:Unary { return "!" + v; }
+      / "-" _ v:Unary { return "-" + v; }
+      / UpdateExpr
+      / Ternary
+      / Primary
+
 UpdateExpr = id:Assignable op:("++" / "--") { return id+op; }
 Ternary = cond:Primary _ "?" _ tExpr:Expression _ ":" _ fExpr:Expression { return cond+" ? "+tExpr+" : "+fExpr; }
 
