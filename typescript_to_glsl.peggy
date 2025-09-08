@@ -1,11 +1,45 @@
 {
-  const typeMap = { number: "float", boolean: "bool", vec2: "vec2", vec3: "vec3", vec4: "vec4", string: "float[]" };
-  const jsFuncMap = {
-    "Math.abs":"abs","Math.acos":"acos","Math.asin":"asin","Math.atan":"atan",
-    "Math.atan2":"atan","Math.ceil":"ceil","Math.cos":"cos","Math.exp":"exp",
-    "Math.floor":"floor","Math.log":"log","Math.max":"max","Math.min":"min",
-    "Math.pow":"pow","Math.sin":"sin","Math.sqrt":"sqrt","Math.tan":"tan"
+  const typeMap = {
+    number: "float",
+    boolean: "bool",
+    vec2: "vec2",
+    vec3: "vec3",
+    vec4: "vec4",
+    string: "float[]"
   };
+
+  const jsFuncMap = {
+    "Math.abs":"abs",
+    "Math.acos":"acos",
+    "Math.asin":"asin",
+    "Math.atan":"atan",
+    "Math.atan2":"atan",
+    "Math.ceil":"ceil",
+    "Math.cos":"cos",
+    "Math.exp":"exp",
+    "Math.floor":"floor",
+    "Math.log":"log",
+    "Math.max":"max",
+    "Math.min":"min",
+    "Math.pow":"pow",
+    "Math.sin":"sin",
+    "Math.sqrt":"sqrt",
+    "Math.tan":"tan",
+    "Math.sign":"sign",
+    "Math.trunc":"trunc",
+    "Math.round":"round",
+    "Math.hypot":"hypot",
+    "Math.cbrt":"cbrt",
+    "Math.expm1":"expm1",
+    "Math.log1p":"log1p",
+    "Math.sinh":"sinh",
+    "Math.cosh":"cosh",
+    "Math.tanh":"tanh",
+    "Math.asinh":"asinh",
+    "Math.acosh":"acosh",
+    "Math.atanh":"atanh"
+  };
+
   const jsConstMap = {
     "Math.E": "(exp(1.0))",
     "Math.LN2": "(log(2.0))",
@@ -16,21 +50,84 @@
     "Math.SQRT1_2": "(sqrt(0.5))",
     "Math.SQRT2": "(sqrt(2.0))"
   };
-  const glslBuiltIns = ["abs","acos","asin","atan","ceil","cos","exp","floor","log","max","min","pow","sin","sqrt","tan","mod","clamp","mix","step","smoothstep","length","normalize","dot","cross","true","false"];
 
-  function mapType(tsType){ if(!tsType) return "float"; if(tsType.endsWith("[]")) return mapType(tsType.slice(0,-2))+"[]"; return typeMap[tsType] || tsType; }
-  function mapFunc(expr){ for(const k in jsFuncMap){ if(expr.startsWith(k+"(")){ const args = expr.slice(k.length+1,expr.length-1); return jsFuncMap[k]+"("+args+")"; } } if(jsConstMap[expr]) return jsConstMap[expr]; return expr; }
+  const glslBuiltIns = [
+    "abs","acos","asin","atan","ceil","cos","exp","floor","log","max","min","pow",
+    "sin","sqrt","tan","mod","clamp","mix","step","smoothstep","length","normalize",
+    "dot","cross","sign","trunc","round","sinh","cosh","tanh","asinh","acosh","atanh",
+    "true","false"
+  ];
+
+  function mapType(tsType){
+    if(!tsType) return "float";
+    if(tsType.endsWith("[]"))
+      return mapType(tsType.slice(0,-2))+"[]";
+    return typeMap[tsType] || tsType;
+  }
+
+  function mapFunc(expr){
+    for(const k in jsFuncMap){
+      if(expr.startsWith(k+"(")){
+        const args = expr.slice(k.length+1,expr.length-1);
+        switch(k){
+          // Only expand functions GLSL lacks natively
+          case "Math.hypot": return "(length(vec" + args.split(",").length + "(" + args + ")))";
+          case "Math.cbrt": return "(pow(" + args + ", 1.0/3.0))";
+          case "Math.expm1": return "((exp(" + args + ")) - 1.0)";
+          case "Math.log1p": return "(log(1.0 + (" + args + ")))";
+          default: return jsFuncMap[k]+"("+args+")"; // GLSL built-ins pass through
+        }
+      }
+    }
+    if(jsConstMap[expr]) return jsConstMap[expr];
+    return expr;
+  }
+
   function emitComment(c){ return c+"\n"; }
   function formatNumber(n){ return n.includes(".") ? n : n+".0"; }
-  function stringToFloatArray(str){ let s = str.slice(1,-1); return "float[](" + Array.from(s).map(c => c.charCodeAt(0)+".0").join(",") + ")"; }
-  function compileIdent(id){ return glslBuiltIns.includes(id) ? id : id+"_compiled"; }
+  function stringToFloatArray(str){
+    let s = str.slice(1,-1);
+    return "float[](" + Array.from(s).map(c => c.charCodeAt(0)+".0").join(",") + ")";
+  }
+  function compileIdent(id){
+    return glslBuiltIns.includes(id) ? id : id+"_compiled";
+  }
 }
 
 /* --- Start --- */
-Start = _ items:(TopLevelItem (_ TopLevelItem)*)? _ { let all = items ? [items[0]].concat(items[1].map(t=>t[1])) : []; return all.join("\n"); }
+Start = _ items:(TopLevelItem (_ TopLevelItem)*)? _ {
+  let all = items ? [items[0]].concat(items[1].map(t=>t[1])) : [];
+  return all.join("\n");
+}
 
 /* --- Top-level items --- */
-TopLevelItem = CommentStmt / ClassOrInterfaceDecl / FunctionDecl / JSFunction / ConstDecl / TopLevelVarDecl / AssignmentStmt / AssignmentNoSemi / IfStmt / ForStmt / WhileStmt / DoWhileStmt / SwitchStmt / ExprStmt
+TopLevelItem
+  = CommentStmt
+  / ClassOrInterfaceDecl
+  / TypeAliasDecl
+  / FunctionDecl
+  / JSFunction
+  / ConstDecl
+  / TopLevelVarDecl
+  / AssignmentStmt
+  / AssignmentNoSemi
+  / IfStmt
+  / ForStmt
+  / WhileStmt
+  / DoWhileStmt
+  / SwitchStmt
+  / ExprStmt
+
+/* --- Type aliases --- */
+TypeAliasDecl
+  = "type" __ id:Identifier _ "=" _ t:Type _ ";" {
+      if (t.endsWith("[]")) {
+        let base = t.slice(0, -2);
+        return "#define " + compileIdent(id) + " " + mapType(base) + "[]";
+      } else {
+        return "#define " + compileIdent(id) + " " + mapType(t);
+      }
+    }
 
 /* --- Statements --- */
 Statement
@@ -49,16 +146,25 @@ Statement
 
 /* --- Top-level const --- */
 ConstDecl
-  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t) + " " + compileIdent(id) + " = " + expr + ";"; }
-  / "const" __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define " + compileIdent(id) + " " + expr + "\n"; }
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t) + " " + compileIdent(id) + " = " + expr + ";";
+    }
+  / "const" __ id:Identifier _ "=" _ expr:Expression _ ";" {
+      return "#define " + compileIdent(id) + " " + expr + "\n";
+    }
 
 /* --- Function-scope const --- */
 ConstStmt
-  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t) + " " + compileIdent(id) + " = " + expr + ";"; }
+  = "const" __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t) + " " + compileIdent(id) + " = " + expr + ";";
+    }
 
 /* --- Block --- */
 Block
-  = "{" _ stmts:(Statement (_ Statement)*)? _ "}" { let allStmts = stmts ? [stmts[0]].concat(stmts[1].map(t=>t[1])) : []; return "{\n" + allStmts.join("\n") + "\n}"; }
+  = "{" _ stmts:(Statement (_ Statement)*)? _ "}" {
+      let allStmts = stmts ? [stmts[0]].concat(stmts[1].map(t=>t[1])) : [];
+      return "{\n" + allStmts.join("\n") + "\n}";
+    }
 
 /* --- Comments --- */
 CommentStmt = c:Comment { return emitComment(c); }
@@ -68,44 +174,80 @@ MultiLineComment = c:$("/*" (!"*/" .)* "*/") { return c; }
 
 /* --- Top-level variable declarations --- */
 TopLevelVarDecl
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+compileIdent(id)+" = "+expr+";"; }
-  / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" { return "#define "+compileIdent(id)+" "+expr+"\n"; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t)+" "+compileIdent(id)+" = "+expr+";";
+    }
+  / ("var"/"let") __ id:Identifier _ "=" _ expr:Expression _ ";" {
+      return "#define "+compileIdent(id)+" "+expr+"\n";
+    }
 
 /* --- Function-scope variable declarations --- */
 VarDecl
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" { return mapType(t)+" "+compileIdent(id)+" = "+expr+";"; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression _ ";" {
+      return mapType(t)+" "+compileIdent(id)+" = "+expr+";";
+    }
 VarDeclNoSemi
-  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression { return mapType(t)+" "+compileIdent(id)+" = "+expr; }
+  = ("var"/"let") __ id:Identifier _ ":" _ t:Type _ "=" _ expr:Expression {
+      return mapType(t)+" "+compileIdent(id)+" = "+expr;
+    }
 
 /* --- Assignment --- */
 AssignmentStmt
   = lhs:Assignable _ op:AssignOp _ rhs:Expression _ ";" { return lhs + " " + op + " " + rhs + ";"; }
-AssignmentNoSemi = id:Assignable _ op:AssignOp _ expr:Expression { return id + " " + op + " " + expr; }
+AssignmentNoSemi
+  = id:Assignable _ op:AssignOp _ expr:Expression { return id + " " + op + " " + expr; }
 AssignOp = "+=" / "-=" / "*=" / "/=" / "="
 
 /* --- Return --- */
 ReturnStmt = "return" __ expr:Expression _ ";" { return "return "+expr+";" }
 
 /* --- If / else --- */
-IfStmt = "if" _ "(" _ cond:Expression _ ")" _ then:Block _ elsePart:ElseClause? { return "if("+cond+") "+then+(elsePart?" "+elsePart:""); }
+IfStmt
+  = "if" _ "(" _ cond:Expression _ ")" _ then:Block _ elsePart:ElseClause? {
+      return "if("+cond+") "+then+(elsePart?" "+elsePart:"");
+    }
 ElseClause = "else" _ stmt:(IfStmt / Block) { return "else "+stmt; }
 
 /* --- Switch --- */
-SwitchStmt = "switch" _ "(" _ expr:Expression _ ")" _ "{" _ cases:(CaseClause _)* _ "}" { return "switch("+expr+") {\n"+cases.map(c=>c[0]).join("")+"\n}"; }
-CaseClause = "case" __ val:Expression ":" _ stmts:((Statement _)+)? { let body = stmts ? stmts.map(s=>s[0]).join("") : ""; return "case "+val+":\n"+body; } / "default" ":" _ stmts:((Statement _)+)? { let body = stmts ? stmts.map(s=>s[0]).join("") : ""; return "default:\n"+body; }
+SwitchStmt
+  = "switch" _ "(" _ expr:Expression _ ")" _ "{" _ cases:(CaseClause _)* _ "}" {
+      return "switch("+expr+") {\n"+cases.map(c=>c[0]).join("")+"\n}";
+    }
+CaseClause
+  = "case" __ val:Expression ":" _ stmts:((Statement _)+)? {
+      let body = stmts ? stmts.map(s=>s[0]).join("") : "";
+      return "case "+val+":\n"+body;
+    }
+  / "default" ":" _ stmts:((Statement _)+)? {
+      let body = stmts ? stmts.map(s=>s[0]).join("") : "";
+      return "default:\n"+body;
+    }
 
 /* --- Loops --- */
-ForStmt = "for" _ "(" _ init:(VarDeclNoSemi / AssignmentNoSemi / Expression)? _ ";" _ cond:Expression? _ ";" _ update:(UpdateExpr / AssignmentNoSemi / Expression)? _ ")" _ body:Block { return "for("+(init||"")+";"+(cond||"")+";"+(update||"")+") "+body; }
-WhileStmt = "while" _ "(" _ cond:Expression _ ")" _ body:Block { return "while("+cond+") "+body; }
-DoWhileStmt = "do" _ body:Block _ "while" _ "(" _ cond:Expression _ ")" _ ";" { return "do "+body+" while("+cond+");"; }
+ForStmt
+  = "for" _ "(" _ init:(VarDeclNoSemi / AssignmentNoSemi / Expression)? _ ";" _ cond:Expression? _ ";" _ update:(UpdateExpr / AssignmentNoSemi / Expression)? _ ")" _ body:Block {
+      return "for("+(init||"")+";"+(cond||"")+";"+(update||"")+") "+body;
+    }
+WhileStmt
+  = "while" _ "(" _ cond:Expression _ ")" _ body:Block { return "while("+cond+") "+body; }
+DoWhileStmt
+  = "do" _ body:Block _ "while" _ "(" _ cond:Expression _ ")" _ ";" {
+      return "do "+body+" while("+cond+");";
+    }
 
 /* --- Function declarations --- */
 FunctionDecl
-  = "function" __ id:Identifier _ "(" _ params:ParamList? _ ")" _ ":" _ ret:Type _ _ body:Block { const ps = params ? params.join(", ") : ""; return mapType(ret) + " " + compileIdent(id) + "(" + ps + ") " + body; }
+  = "function" __ id:Identifier _ "(" _ params:ParamList? _ ")" _ ":" _ ret:Type _ _ body:Block {
+      const ps = params ? params.join(", ") : "";
+      return mapType(ret) + " " + compileIdent(id) + "(" + ps + ") " + body;
+    }
 
 /* --- JS macro-style functions --- */
 JSFunction
-  = "function" __ id:Identifier _ "(" _ params:IdentifierList? _ ")" _ "{" _ body:MacroBody _ "}" { const ps = params?params.join(","):""; return "#define "+compileIdent(id)+"("+ps+") "+body+"\n"; }
+  = "function" __ id:Identifier _ "(" _ params:IdentifierList? _ ")" _ "{" _ body:MacroBody _ "}" {
+      const ps = params?params.join(","):"";
+      return "#define "+compileIdent(id)+"("+ps+") "+body+"\n";
+    }
 MacroBody = "return" __ expr:Expression _ ";" { return expr; }
 
 /* --- Parameters --- */
@@ -127,7 +269,20 @@ UpdateExpr = id:Assignable op:("++" / "--") { return id+op; }
 Ternary = cond:Primary _ "?" _ tExpr:Expression _ ":" _ fExpr:Expression { return cond+" ? "+tExpr+" : "+fExpr; }
 
 /* --- Primary expressions --- */
-Primary = "true" { return "true"; } / "false" { return "false"; } / "(" _ e:Expression _ ")" { return "(" + e + ")"; } / ArrayLiteral / MathCall / FuncCall / NewExpr / StructConstructor / Assignable / IdentifierDot / StringLiteral / Identifier / Number
+Primary
+  = "true" { return "true"; }
+  / "false" { return "false"; }
+  / "(" _ e:Expression _ ")" { return "(" + e + ")"; }
+  / ArrayLiteral
+  / MathCall
+  / FuncCall
+  / NewExpr
+  / StructConstructor
+  / Assignable
+  / IdentifierDot
+  / StringLiteral
+  / Identifier
+  / Number
 
 /* --- New operator --- */
 NewExpr = "new" __ id:Identifier "(" _ args:ArgList? _ ")" { return compileIdent(id) + "(" + (args ? args.join(",") : "") + ")"; }
@@ -136,7 +291,15 @@ NewExpr = "new" __ id:Identifier "(" _ args:ArgList? _ ")" { return compileIdent
 StructConstructor = id:Identifier "(" _ args:ArgList? _ ")" { return compileIdent(id)+"("+(args?args.join(","):"")+")"; }
 
 /* --- Arrays --- */
-ArrayLiteral = "[" _ elements:ExprList _ "]" { const elems = elements.join(", "); switch(elements.length){ case 2: return `vec2(${elems})`; case 3: return `vec3(${elems})`; case 4: return `vec4(${elems})`; default: return `float[](${elems})`; } }
+ArrayLiteral = "[" _ elements:ExprList _ "]" {
+  const elems = elements.join(", ");
+  switch(elements.length){
+    case 2: return `vec2(${elems})`;
+    case 3: return `vec3(${elems})`;
+    case 4: return `vec4(${elems})`;
+    default: return `float[](${elems})`;
+  }
+}
 ExprList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Math calls --- */
@@ -145,7 +308,12 @@ FuncCall = id:Identifier "(" _ args:ArgList? _ ")" { return id+"("+(args?args.jo
 ArgList = head:Expression tail:(_ "," _ Expression)* { return [head].concat(tail.map(t=>t[3])); }
 
 /* --- Assignable / dot-access --- */
-Assignable = base:IdentifierOrCall tail:(_ AccessPart)* { return tail.reduce((acc,t)=>{ const p=t[1]; return p.type==="member"?acc+"."+p.name:acc+"["+p.index+"]"; }, base); }
+Assignable = base:IdentifierOrCall tail:(_ AccessPart)* {
+  return tail.reduce((acc,t)=>{
+    const p=t[1];
+    return p.type==="member"?acc+"."+p.name:acc+"["+p.index+"]";
+  }, base);
+}
 IdentifierOrCall = NewExpr / StructConstructor / FuncCall / IdentifierDot / Identifier
 AccessPart = "." name:Identifier { return {type:"member", name}; } / "[" _ idx:Expression _ "]" { return {type:"index", index:idx}; }
 IdentifierDot = left:Identifier "." right:Identifier { return left+"."+right; }
@@ -159,8 +327,12 @@ ExprStmt = expr:Expression _ ";" { return expr+";"; }
 /* --- Numbers --- */
 Number = n:$([0-9]+ ("." [0-9]+)?) { return formatNumber(text()); }
 
-/* --- Classes and Interfaces --- */
-ClassOrInterfaceDecl = kw:("class"/"interface") __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" { const allFields = fields?[fields[0]].concat(fields[1].map(t=>t[1])):[]; const members = allFields.map(f=>mapType(f.type)+" "+f.name+";").join("\n"); return "typedef struct {\n"+members+"\n} "+compileIdent(id)+";\n"; }
+/* --- Classes --- */
+ClassOrInterfaceDecl = kw:("class"/"interface") __ id:Identifier _ "{" _ fields:(ClassField (_ ClassField)*)? _ "}" {
+  const allFields = fields?[fields[0]].concat(fields[1].map(t=>t[1])):[];
+  const members = allFields.map(f=>mapType(f.type)+" "+f.name+";").join("\n");
+  return "#define " + compileIdent(id) + " struct {\n"+members+"\n}";
+}
 ClassField = _ id:Identifier _ ":" _ t:Type _ ";" { return {name:id,type:t}; }
 
 /* --- Types --- */
