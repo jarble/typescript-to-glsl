@@ -1,10 +1,12 @@
+
 <!DOCTYPE html>
 <html>
 	<head>
+	 <script src="https://unpkg.com/peggy"></script>
 	</head>
 <body onload>
 	
-<h1><a href="https://github.com/jarble/typeScript-to-glsl">TypeScript to glsl</a></h1>
+<h1><a href="https://github.com/jarble/typeScript-to-glsl">TypeScript to GLSL</a></h1>
 <h2>TypeScript input:</h2>
 <textarea id="my-input" cols="40" rows="5" placeholder="Type something here"></textarea>
 <h2>GLSL output:</h2>
@@ -12,11 +14,9 @@
 </label>
 <p>You can test the compiled output on <a href="https://www.shadertoy.com/new">Shadertoy.</a></p>
 
-<script src = "parser.js"></script>
-<script type = "module">
+<script>
 		// Get the input box
 const tx = document.getElementsByTagName("textarea");
-
 for (let i = 0; i < tx.length; i++) {
   tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
   tx[i].addEventListener("input", OnInput, false);
@@ -37,6 +37,18 @@ let input = document.getElementById('my-input');
 let timeout = null;
 
 
+
+fetch ("typescript_to_glsl.peggy")
+.then(x => x.text())
+.then(function(y){
+	const parser = peggy.generate(y);
+		//get hash
+if(window.location.hash){
+	input.value = decodeURI(window.location.hash).substring(1,window.location.hash.length);
+	document.getElementById("outputText").value = parser.parse(input.value);
+}
+
+
 // Listen for keystroke events
 input.addEventListener('keyup', function (e) {
     // Clear the timeout if it has already been set.
@@ -46,9 +58,10 @@ input.addEventListener('keyup', function (e) {
 
     // Make a new timeout set to go off in 1000ms (1 second)
     timeout = setTimeout(function () {
-        document.getElementById("outputText").value = Peggy.parse(input.value);
+        document.getElementById("outputText").value = parser.parse(input.value);
 	    window.location.hash = "#"+encodeURI(input.value);
     }, 1000);
+});
 });
 
 
